@@ -1,9 +1,7 @@
-use async_tungstenite::tokio::connect_async;
-use async_tungstenite::tungstenite::Message;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use crate::{BASE_URL, USER_AGENT};
-use crate::discord_api::{DiscordApiError, DiscordApiResponse};
+use crate::discord_api::{DiscordApiResponse};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiscordUser {
@@ -22,7 +20,7 @@ pub struct AccountClient {
 
 impl AccountClient {
     pub async fn new(token: String) -> anyhow::Result<AccountClient> {
-        let (mut conn, _r) = connect_async("wss://discord.com").await?;
+        // let (mut conn, _r) = connect_async("wss://discord.com").await?;
         let req_client = reqwest::ClientBuilder::new().user_agent(USER_AGENT).default_headers({
             let mut dft_headers = HeaderMap::new();
             dft_headers.insert(AUTHORIZATION, HeaderValue::from_str(token.as_str())?);
