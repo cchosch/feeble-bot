@@ -5,8 +5,15 @@ diesel::table! {
         id -> Varchar,
         real_account_id -> Varchar,
         controlled_account_id -> Varchar,
-        real_account_name -> Varchar,
-        guild_id -> Varchar,
+    }
+}
+
+diesel::table! {
+    discord_account (id) {
+        id -> Varchar,
+        account_id -> Varchar,
+        account_name -> Varchar,
+        account_token -> Varchar,
     }
 }
 
@@ -36,6 +43,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     account_mapping,
+    discord_account,
     sessions,
     users,
 );
