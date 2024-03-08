@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -14,7 +16,6 @@ use axum_extra::extract::cookie::Key;
 use axum_extra::extract::CookieJar;
 
 use cookie::Cookie;
-use diesel::prelude::*;
 use futures_util::future::BoxFuture;
 use log::{debug, error, info};
 use tokio::sync::OwnedRwLockWriteGuard;
@@ -23,54 +24,60 @@ use tower::Layer;
 use tower_service::Service;
 use urlencoding::decode;
 
-use crate::db::get_conn;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use diesel::{QueryResult, SelectableHelper};
+use crate::api::DbConn;
 use crate::schema::sessions::dsl::sessions;
 use crate::schema::sessions::{sess_cookie, sess_id};
 use crate::api::session::session::{DBSession, Session, SessionHandle, SESSION_COOKIE_NAME};
+use crate::db::ConnPool;
 
 #[derive(Clone)]
 pub struct PgSessionLayer {
     secure: bool,
     key: Key,
     session_cookie: &'static str,
+    pool: Arc<ConnPool>
 }
+
 unsafe impl Send for PgSessionLayer {}
 unsafe impl Sync for PgSessionLayer {}
 
 const BASE64_DIGEST_LEN: usize = 44;
 
 impl PgSessionLayer {
-    pub fn new(secret: &[u8], secure: bool) -> Self {
+    pub fn new(secret: &[u8], secure: bool, pool: Arc<ConnPool>) -> Self {
         if secret.len() < 64 {
             panic!("Secret must be at least 64 bytes");
         }
         Self {
             secure,
+            pool,
             key: Key::from(secret),
             session_cookie: SESSION_COOKIE_NAME,
         }
     }
 
     /// Remove session from database
-    pub async fn destroy_sess(&self, sess: Session) -> QueryResult<Vec<DBSession>> {
+    pub async fn destroy_sess(&self, sess: Session, conn: &mut DbConn) -> QueryResult<Vec<DBSession>> {
         info!("destroying sess");
-        diesel::delete(sessions.filter(sess_id.eq(sess.id))).load::<DBSession>(&mut get_conn())
+        diesel::delete(sessions.filter(sess_id.eq(sess.id))).load::<DBSession>(conn).await
     }
 
     /// Store session in database
-    pub async fn db_store(&self, sess: Session) -> QueryResult<()> {
+    pub async fn db_store(&self, sess: Session, conn: &mut DbConn) -> QueryResult<()> {
         diesel::delete(sessions)
             .filter(sess_id.eq(sess.clone().id))
-            .load::<DBSession>(&mut get_conn())
+            .load::<DBSession>(conn)
+            .await
             .ok();
         let res = diesel::insert_into(sessions)
             .values(&sess.to_db_session())
             .returning(DBSession::as_returning())
-            .get_result(&mut get_conn());
+            .get_result(conn).await;
         if let Err(e) = res {
             error!("{e}");
             return Err(e);
@@ -79,12 +86,12 @@ impl PgSessionLayer {
     }
 
     /// Lookup session in db with unsigned cookie.
-    pub async fn db_lookup(&self, raw_cookie: String) -> QueryResult<Option<Session>> {
+    pub async fn db_lookup(&self, raw_cookie: String, conn: &mut DbConn) -> QueryResult<Option<Session>> {
         let dec_cookie = decode(raw_cookie.as_str()).unwrap();
         let cookie = PgSessionLayer::split_signature(dec_cookie.deref()).1;
         let db_res: QueryResult<DBSession> = sessions
             .filter(sess_cookie.eq(cookie))
-            .first::<DBSession>(&mut get_conn());
+            .first::<DBSession>(conn).await;
         if let Err(e) = db_res {
             if let diesel::NotFound = e {
                 return Ok(None);
@@ -94,19 +101,19 @@ impl PgSessionLayer {
         Ok(Some(db_res.unwrap().to_session()))
     }
 
-    /// Load cookie from raw cookie value, if it's not found or it's expired, this function will
-    /// create a new cookie for you. Returns session handle and a bool representing whether or not
+    /// Load cookie from raw cookie value, if it's not found, or it's expired, this function will
+    /// create a new cookie for you. Returns session handle and a bool representing whether
     /// session was just created
-    async fn load_or_create(&self, cookie_value: Option<&String>) -> (SessionHandle, bool) {
+    async fn load_or_create(&self, conn: &mut DbConn, cookie_value: Option<&String>) -> (SessionHandle, bool) {
         let session = match cookie_value {
-            Some(cookie_value) => self.db_lookup(cookie_value.clone()).await.ok().flatten(),
+            Some(cookie_value) => self.db_lookup(cookie_value.clone(), conn).await.ok().flatten(),
             None => None,
         };
 
         if let Some(sess) = session {
-            // prob not gonna run because browser wont send expired cookie
+            // prob not going to run because browser won't send expired cookie
             if sess.is_expired() {
-                let _ = self.destroy_sess(sess).await;
+                let _ = self.destroy_sess(sess, conn).await;
             } else {
                 return (Arc::new(RwLock::new(sess)), true);
             }
@@ -216,7 +223,7 @@ impl<S> Service<Request<Body>> for PgSessionMiddleware<S>
             }
 
             // get handle
-            let (sess_handle, in_db) = this.layer.load_or_create(cook).await;
+            let (sess_handle, in_db) = this.layer.load_or_create(&mut this.layer.pool.get().await.unwrap(), cook).await;
 
             request.extensions_mut().insert(sess_handle.clone());
             // send request to next layer
@@ -231,19 +238,21 @@ impl<S> Service<Request<Body>> for PgSessionMiddleware<S>
                 return Ok(response);
             }
 
+            let mut db_conn = this.layer.pool.get().await.unwrap();
             // if session has expressly been marked for deletion, delete it from the db, and return
             if session.to_del() {
                 // if it's in the db just created, remove it from db
                 if in_db {
-                    this.layer.destroy_sess(session).await.unwrap();
+                    this.layer.destroy_sess(session, &mut db_conn).await.unwrap();
                 }
                 // otherwise its not even in db so just return
                 return Ok(response);
             }
             // if session has been modified, store modifications in db
             if has_changed {
-                this.layer.db_store(session.clone()).await.unwrap();
+                this.layer.db_store(session.clone(), &mut db_conn).await.unwrap();
             }
+            drop(db_conn);
 
             let mut sid_cook = Cookie::build((SESSION_COOKIE_NAME, session.cookie))
                 .secure(this.layer.secure.clone())

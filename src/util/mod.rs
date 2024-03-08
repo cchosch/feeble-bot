@@ -1,3 +1,5 @@
+pub mod log;
+
 pub fn strip_quotes(mut st: String) -> String {
     // suffix
     st = st
