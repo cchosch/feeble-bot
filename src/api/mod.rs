@@ -1,6 +1,7 @@
 pub(crate) mod session;
 pub mod auth;
 pub mod err;
+mod bots;
 
 use std::env::var;
 use std::sync::Arc;

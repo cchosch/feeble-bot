@@ -1,2 +1,2 @@
-mod account_client;
+pub mod account_client;
 mod manager;

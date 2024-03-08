@@ -14,6 +14,7 @@ diesel::table! {
         account_id -> Varchar,
         account_name -> Varchar,
         account_token -> Varchar,
+        created_by -> Varchar,
     }
 }
 
