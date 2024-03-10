@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 
 use diesel::prelude::*;
 use lazy_static::lazy_static;
-use rand::{random, Rng};
+use rand::{random};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -18,7 +18,7 @@ use crate::schema::sessions;
 
 
 lazy_static! {
-    pub static ref SESS_TIMEOUT: Duration = Duration::days(5);
+    pub static ref SESS_TIMEOUT: Duration = Duration::try_days(5).unwrap();
 }
 
 pub static SESSION_COOKIE_NAME: &'static str = "sid";
@@ -36,7 +36,7 @@ pub struct DBSession {
 
 impl Default for DBSession {
     fn default() -> Self {
-        let id = hex::encode(rand::thread_rng().gen::<[u8; 32]>());
+        let id = hex::encode(random::<[u8; 32]>());
         DBSession {
             sess_id: id.clone(),
             sess_cookie: Session::generate_cookie(id),

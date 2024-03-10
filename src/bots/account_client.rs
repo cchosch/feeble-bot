@@ -2,10 +2,12 @@ use log::error;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use crate::{BASE_URL, USER_AGENT};
+use crate::api::DbConn;
 use crate::api::err::{ApiError, ApiResult};
 use crate::db::gen_id;
 use crate::discord_api::{DiscordApiResponse};
-use crate::schemas::account_mapping::DiscordAccount;
+use crate::schema::controlled_account::dsl::controlled_account;
+use crate::schemas::controlled_account::ControlledAccount;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiscordUser {
@@ -54,7 +56,7 @@ impl AccountClient {
         })
     }
 
-    pub fn to_discord_account(&self) -> DiscordAccount {
-        DiscordAccount::new(&self)
+    pub fn to_discord_account(&self) -> ControlledAccount {
+        ControlledAccount::new(&self)
     }
 }
