@@ -4,7 +4,7 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use crate::api::DbConn;
 use crate::api::err::{ApiError, ApiResult};
-use crate::bots::account_client::AccountClient;
+use crate::bots::account_client::BotClient;
 use crate::db::gen_id;
 use crate::schema::controlled_account::dsl::controlled_account;
 use crate::schema::controlled_account::id;
@@ -22,7 +22,7 @@ pub struct ControlledAccount {
 }
 
 impl ControlledAccount {
-    pub fn new(account_client: &AccountClient) -> Self {
+    pub fn new(account_client: &BotClient) -> Self {
         Self {
             id: gen_id(),
             discord_id: account_client.account_id.clone(),

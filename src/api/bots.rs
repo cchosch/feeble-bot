@@ -7,7 +7,7 @@ use crate::api::ApiContext;
 use crate::api::session::WritableSession;
 use crate::api::err::ApiError;
 use crate::auth_session;
-use crate::bots::account_client::AccountClient;
+use crate::bots::account_client::BotClient;
 use crate::schemas::controlled_account::ControlledAccount;
 
 #[derive(Deserialize)]
@@ -27,7 +27,7 @@ pub async fn post_bot(
     WithRejection(payload, _): WithRejection<Json<CreateBotPayload>, ApiError>
 ) -> impl IntoResponse {
     let uid = auth_session!(sess);
-    let acc_client = AccountClient::new(payload.token.clone(), uid).await?;
+    let acc_client = BotClient::new(payload.token.clone(), uid).await?;
     let acc = acc_client.to_discord_account();
     acc.create(&mut ctx.get_conn().await?).await?;
 

@@ -1,3 +1,4 @@
+use std::env;
 use std::net::SocketAddr;
 use axum::Router;
 use diesel_async::RunQueryDsl;
@@ -5,6 +6,7 @@ use dotenv::dotenv;
 use log::error;
 use tokio::net::TcpListener;
 use crate::api::{DbConn, get_router};
+use crate::bots::account_client::BotClient;
 use crate::db::gen_pool;
 use crate::schema::users::dsl::users;
 use crate::schemas::User;
@@ -51,7 +53,8 @@ async fn main() {
     init_logger().unwrap();
 
     // AccountClient::new();
-    // let acc = AccountClient::new(String::from(env::var("TEST_TOKEN").unwrap())).await.unwrap();
+    let acc = BotClient::new(String::from(env::var("TEST_TOKEN").unwrap()), String::from("jajajaj")).await.unwrap();
+    tokio::spawn(acc.spawn_ws_conn());
     let app = init_app().await.unwrap();
     // test_layout();
 
