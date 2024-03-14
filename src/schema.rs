@@ -21,6 +21,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    discord_account (id) {
+        id -> Varchar,
+        account_id -> Varchar,
+        account_name -> Varchar,
+        account_token -> Varchar,
+        created_by -> Varchar,
+    }
+}
+
+diesel::table! {
     sessions (sess_id) {
         sess_id -> Text,
         sess_cookie -> Text,
@@ -47,6 +57,7 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     account_mapping,
     controlled_account,
+    discord_account,
     sessions,
     users,
 );
