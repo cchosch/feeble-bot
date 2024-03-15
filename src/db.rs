@@ -1,15 +1,36 @@
 use std::env;
 use diesel_async::pooled_connection::deadpool::Pool;
-use diesel_async::AsyncPgConnection;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use rand::Rng;
-use crate::api::DbConn;
+use rand::{random};
+use crate::schema::users::dsl::users;
+use crate::schemas::User;
 
 pub type ConnPool = Pool<AsyncPgConnection>;
 
 /// Generates random 8 byte integer encod as hex
 pub fn gen_id() -> String {
-    hex::encode(rand::thread_rng().gen::<[u8; 8]>())
+    hex::encode(random::<[u8; 8]>())
+}
+
+pub async fn init_db(pool: ConnPool) -> anyhow::Result<()> {
+    let mut conn = pool.get().await?;
+    match users.first::<User>(&mut conn).await {
+        Err(e) => {
+            match e {
+                diesel::result::Error::NotFound => {
+                    let u = User::new(String::from("cchosch"), String::from("admin"), String::new());
+                    diesel::insert_into(users).values(&u).execute(&mut conn).await?;
+                    return Ok(())
+                },
+                _ => {
+                    Err(e)?
+                }
+            }
+        },
+        Ok(_u) => {return Ok(())}
+    }
+    Ok(())
 }
 
 /// Creates new `Pool<ConnectionManager<PgConnection>>>`

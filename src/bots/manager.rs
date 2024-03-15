@@ -23,6 +23,7 @@ impl BotManager {
     }
 
     pub async fn new_bot(&self, new_client: BotClient) {
+        let s = new_client.spawn_ws_conn().await;
         self.bots.write().await.push((None, new_client))
     }
 }

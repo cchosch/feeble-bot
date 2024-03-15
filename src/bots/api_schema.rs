@@ -57,7 +57,7 @@ pub enum IncomingWsEvent {
     PresenceUpdate {
         user: DumbUser,
         status: String,
-        guild_id: String,
+        guild_id: Option<String>,
     },
     Hello {
         heartbeat_interval: i32,
@@ -91,7 +91,9 @@ pub enum WsMessageType {
         activities: Option<Vec<Value>>,
         status: String,
         afk: bool,
-    }
+    },
+    /// Send this through channel to disconnect the websocket
+    InternalDisconnect
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -155,6 +157,14 @@ impl WsMessageType {
                         "status": status,
                         "afk": afk,
                     }))
+                }
+            },
+            WsMessageType::InternalDisconnect => {
+                WsMessage {
+                    t: None,
+                    s: None,
+                    op: 5,
+                    d: None
                 }
             }
         }

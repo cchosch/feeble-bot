@@ -18,7 +18,7 @@ use crate::bots::api_schema::{IncomingWsEvent, WsMessage, WsMessageType};
 use crate::bots::manager::BotCommand;
 
 pub fn ws_loop(token: String, sess_id: Arc<Mutex<Option<String>>>, recv: Arc<Receiver<BotCommand>>) -> impl Future<Output=()> {
-    async {
+    async move {
         let once_heartbeat = Arc::new(Once::new());
         let handle = Handle::current();
         let (ws, _r) = match connect_async("wss://gateway.discord.gg/?v=10&encoding=json").await {
@@ -41,14 +41,16 @@ pub fn ws_loop(token: String, sess_id: Arc<Mutex<Option<String>>>, recv: Arc<Rec
                     _ => {}
                 };
             }
+            info!("over");
         });
+
     }
 }
 
 async fn on_incoming_msg(item: Result<Message, tungstenite::Error>, sess_id: Arc<Mutex<Option<String>>>, once_heartbeat: Arc<Once>, ws_sender: Sender<WsMessageType>, last_ack: Arc<AtomicI32>) -> anyhow::Result<(), (anyhow::Error, String)> {
     let mut str_version = String::new();
     async  {
-        *&mut str_version = item?.into_text()?;
+        str_version = item?.into_text()?;
         let msg = serde_json::from_str::<WsMessage>(str_version.as_str())?;
         match msg.s {
             Some(s) => {
@@ -58,9 +60,14 @@ async fn on_incoming_msg(item: Result<Message, tungstenite::Error>, sess_id: Arc
         }
         match msg.d {
             Some(data) => {
-                let incoming = match serde_json::from_value::<IncomingWsEvent>(data) {
+                let incoming = match serde_json::from_value::<IncomingWsEvent>(data.clone()) {
                     Err(_e) => {
-                        info!("message type ({}) ({}) not implemented", msg.t.unwrap_or(String::from("none")), msg.op);
+
+                        let msg_type = msg.t.unwrap_or(String::from("none"));
+                        if vec![String::from("SESSIONS_REPLACE"), String::from("PRESENCE_UPDATE")].contains(&msg_type) {
+                            info!("{}", data);
+                        }
+                        info!("message type ({}) ({}) not implemented", msg_type, msg.op);
                         return Ok(())
                     },
                     Ok(v) => v
@@ -128,7 +135,7 @@ async fn init_ws_conn(token: String, ws: WebSocketStream<ConnectStream>) -> (Sen
     handle.spawn(async move {
         loop {
             match write_r.recv().await {
-                Err(_e) => {
+                Err(_) | Ok(WsMessageType::InternalDisconnect) => {
                     write_r.close();
                     return;
                 },

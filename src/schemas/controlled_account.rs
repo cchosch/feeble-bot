@@ -17,6 +17,7 @@ pub struct ControlledAccount {
     pub id: String,
     pub discord_id: String,
     pub username: String,
+    #[serde(skip_serializing)]
     token: String,
     created_by: String,
 }

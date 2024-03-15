@@ -7,7 +7,7 @@ use log::error;
 use tokio::net::TcpListener;
 use crate::api::{DbConn, get_router};
 use crate::bots::account_client::BotClient;
-use crate::db::gen_pool;
+use crate::db::{gen_pool, init_db};
 use crate::schema::users::dsl::users;
 use crate::schemas::User;
 use crate::util::log::init_logger;
@@ -43,6 +43,7 @@ async fn create_first_user(c: &mut DbConn) {
 
 async fn init_app() -> anyhow::Result<Router> {
     let pool = gen_pool();
+    init_db(pool.clone()).await?;
     create_first_user(&mut pool.get().await?).await;
     Ok(Router::new().nest_service("/api", get_router(pool)?))
 }
