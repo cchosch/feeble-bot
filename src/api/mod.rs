@@ -6,7 +6,7 @@ mod bots;
 use std::env::var;
 use std::sync::Arc;
 use axum::Router;
-use axum::routing::post;
+use axum::routing::{post, get};
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::deadpool::Object;
 use log::error;
@@ -17,6 +17,8 @@ use crate::api::err::ApiError;
 use crate::api::session::layer::PgSessionLayer;
 use crate::db::ConnPool;
 use crate::PROD;
+
+use self::auth::get_me;
 
 /// authenticates session
 #[macro_export]
@@ -57,7 +59,7 @@ pub fn get_router(p: ConnPool) -> anyhow::Result<Router> {
         PROD,
         conn_pool.clone(),
     );
-    Ok(Router::new().route("/login", post(sign_in)).layer(session_layer).layer(ServiceBuilder::new().layer(AddExtensionLayer::new(
+    Ok(Router::new().route("/login", post(sign_in)).route("/me", get(get_me)).layer(session_layer).layer(ServiceBuilder::new().layer(AddExtensionLayer::new(
         ApiContext {
             db: conn_pool,
         }

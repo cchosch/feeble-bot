@@ -5,6 +5,7 @@ use diesel_async::RunQueryDsl;
 use dotenv::dotenv;
 use log::error;
 use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
 use crate::api::{DbConn, get_router};
 use crate::bots::account_client::BotClient;
 use crate::db::{gen_pool, init_db};
@@ -45,7 +46,13 @@ async fn init_app() -> anyhow::Result<Router> {
     let pool = gen_pool();
     init_db(pool.clone()).await?;
     create_first_user(&mut pool.get().await?).await;
-    Ok(Router::new().nest_service("/api", get_router(pool)?))
+    let cors = if PROD {
+        CorsLayer::new()
+    } else {
+        CorsLayer::very_permissive()
+    };
+
+    Ok(Router::new().nest_service("/api", get_router(pool)?).layer(cors))
 }
 
 #[tokio::main]

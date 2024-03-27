@@ -7,9 +7,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use crate::api::DbConn;
 use crate::api::err::{ApiError, ApiResult};
+use crate::conv_search_err;
 use crate::db::gen_id;
 use crate::schema::users::dsl::users;
-use crate::schema::users::{username as db_username};
+use crate::schema::users::{id, username as db_username};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Selectable, Queryable, Insertable)]
 #[diesel(table_name = crate::schema::users)]
@@ -76,20 +77,11 @@ impl User {
         return self;
     }
 
+    pub async fn get_by_id(uid: String, conn: &mut DbConn) -> ApiResult<User> {
+        return users.filter(id.eq(uid)).first(conn).await.map_err(|e| conv_search_err!(e))
+    }
+
     pub async fn get_by_username(username: String, conn: &mut DbConn) -> ApiResult<User> {
-        match users.filter(db_username.eq(username)).first(conn).await {
-            Ok(user) => Ok(user),
-            Err(e) => {
-                match e {
-                    diesel::result::Error::NotFound => {
-                        Err(ApiError::Unauthenticated)
-                    },
-                    _ => {
-                        error!("{e}");
-                        Err(ApiError::InternalError)
-                    }
-                }
-            },
-        }
+        users.filter(db_username.eq(username)).first(conn).await.map_err(|e| conv_search_err!(e))
     }
 }

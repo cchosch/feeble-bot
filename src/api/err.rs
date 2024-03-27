@@ -4,6 +4,7 @@ use axum::Json;
 use axum_core::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use log::error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApiErrorMessage {
@@ -16,6 +17,21 @@ fn error_msg(err: &str, usr_msg: Option<&str>) -> Json<ApiErrorMessage> {
         error_msg: err.to_string(),
         user_msg: usr_msg.unwrap_or("Something went wrong").to_string(),
     })
+}
+
+#[macro_export]
+macro_rules! conv_search_err {
+    (
+        $e:expr
+    ) => {
+        match $e {
+            diesel::result::Error::NotFound => ApiError::NotFound,
+            _ => {
+                error!("{}", $e);
+                ApiError::InternalError
+            }
+        }
+    };
 }
 
 pub type ApiResult<T> = Result<T, ApiError>;
